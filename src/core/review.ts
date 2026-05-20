@@ -21,6 +21,8 @@ export function renderAgentEvalReview(audit: AgentEvalAudit): string {
       : findings.slice(0, 10).map((finding, index) => `${index + 1}. ${title(finding.severity)} ${finding.title}: ${finding.details ?? finding.evidencePath}`).join('\n'),
     '',
     '## Metrics',
+    `- Score: ${audit.metrics.scorePercent}/100`,
+    `- Pass rate: ${Math.round(audit.metrics.passRate * 100)}% (${audit.metrics.passedExpectationCount}/${audit.metrics.expectationCount} expectations)`,
     `- Scenarios: ${audit.metrics.scenarioCount}`,
     `- Passed: ${audit.metrics.passedScenarioCount}`,
     `- Failed: ${audit.metrics.failedScenarioCount}`,

@@ -70,6 +70,9 @@ export interface AgentEvalSummary {
   runId: string;
   decision: AgentEvalDecision;
   status: AgentEvalRunStatus;
+  score: number;
+  scorePercent: number;
+  passRate: number;
   auditPath: string;
   reviewPath: string;
   summaryPath: string;
@@ -301,6 +304,16 @@ export interface EvalRunMetrics {
   passedScenarioCount: number;
   failedScenarioCount: number;
   needsReviewScenarioCount: number;
+  expectationCount: number;
+  passedExpectationCount: number;
+  failedExpectationCount: number;
+  warningExpectationCount: number;
+  needsReviewExpectationCount: number;
+  passRate: number;
+  score: number;
+  scorePercent: number;
+  maxScore: number;
+  earnedScore: number;
   totalTokens: number;
   maxLatencyMs: number;
   avgLatencyMs: number | null;

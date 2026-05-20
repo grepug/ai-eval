@@ -53,9 +53,13 @@ describe('runAgentEval', () => {
       });
 
       expect(result.audit.evalRun.decision).toBe('passed');
+      expect(result.audit.metrics.scorePercent).toBe(100);
+      expect(result.audit.metrics.passRate).toBe(1);
+      expect(result.summary.scorePercent).toBe(100);
       expect(result.summary.auditPath).toBe('audit.json');
       expect(JSON.parse(await readFile(join(outputDir, 'summary.json'), 'utf8')).decision).toBe('passed');
       expect(await readFile(join(outputDir, 'review.md'), 'utf8')).toContain('Decision: Passed');
+      expect(await readFile(join(outputDir, 'review.md'), 'utf8')).toContain('Score: 100/100');
       expect(await readFile(join(outputDir, 'traces/weather-tool-required/weather-agent.turn-1.json'), 'utf8')).toContain('weather');
     } finally {
       await rm(outputDir, { recursive: true, force: true });

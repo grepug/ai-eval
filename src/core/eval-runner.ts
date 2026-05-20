@@ -163,6 +163,9 @@ export async function runAgentEval(input: RunAgentEvalInput): Promise<AgentEvalR
       runId,
       decision: audit.evalRun.decision,
       status: audit.evalRun.status,
+      score: audit.metrics.score,
+      scorePercent: audit.metrics.scorePercent,
+      passRate: audit.metrics.passRate,
       auditPath: 'audit.json',
       reviewPath: 'review.md',
       summaryPath: 'summary.json',
@@ -329,14 +332,59 @@ function summarizeAgents(agents: RunAgentEvalInput['agents'], scenarios: Record<
 function summarizeRun(scenarios: ScenarioAuditResult[]): AgentEvalAudit['metrics'] {
   const agentResults = scenarios.flatMap((scenario) => Object.values(scenario.agentResults));
   const latencies = agentResults.map((result) => result.summary.durationMs);
+  const evaluatorResults = agentResults.flatMap((result) => result.evaluatorResults);
+  const expectationCount = evaluatorResults.length;
+  const passedExpectationCount = evaluatorResults.filter((result) => result.status === 'passed').length;
+  const failedExpectationCount = evaluatorResults.filter((result) => result.status === 'failed').length;
+  const warningExpectationCount = evaluatorResults.filter((result) => result.status === 'warning').length;
+  const needsReviewExpectationCount = evaluatorResults.filter((result) => result.status === 'needs_review').length;
+  const weighted = weightedScore(evaluatorResults);
   return {
     scenarioCount: scenarios.length,
     passedScenarioCount: scenarios.filter((scenario) => scenario.status === 'passed').length,
     failedScenarioCount: scenarios.filter((scenario) => scenario.status === 'failed').length,
     needsReviewScenarioCount: scenarios.filter((scenario) => scenario.status === 'needs_review').length,
+    expectationCount,
+    passedExpectationCount,
+    failedExpectationCount,
+    warningExpectationCount,
+    needsReviewExpectationCount,
+    passRate: expectationCount === 0 ? 1 : roundScore(passedExpectationCount / expectationCount),
+    score: weighted.maxScore === 0 ? 1 : roundScore(weighted.earnedScore / weighted.maxScore),
+    scorePercent: weighted.maxScore === 0 ? 100 : Math.round((weighted.earnedScore / weighted.maxScore) * 100),
+    maxScore: weighted.maxScore,
+    earnedScore: weighted.earnedScore,
     totalTokens: agentResults.reduce((total, result) => total + result.summary.totalTokens, 0),
     maxLatencyMs: Math.max(0, ...latencies),
     avgLatencyMs: latencies.length ? Math.round(latencies.reduce((total, value) => total + value, 0) / latencies.length) : null,
     totalCost: null,
   };
+}
+
+function weightedScore(results: EvaluatorResult[]): { maxScore: number; earnedScore: number } {
+  return results.reduce((total, result) => {
+    const severity = result.findings[0]?.severity ?? 'minor';
+    const weight = severityWeight(severity);
+    return {
+      maxScore: total.maxScore + weight,
+      earnedScore: total.earnedScore + (result.status === 'passed' ? weight : 0),
+    };
+  }, { maxScore: 0, earnedScore: 0 });
+}
+
+function severityWeight(severity: EvalFinding['severity']): number {
+  switch (severity) {
+    case 'blocker':
+      return 50;
+    case 'major':
+      return 30;
+    case 'minor':
+      return 15;
+    case 'info':
+      return 5;
+  }
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 10000) / 10000;
 }
