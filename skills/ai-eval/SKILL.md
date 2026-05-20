@@ -1,11 +1,11 @@
 ---
 name: ai-eval
-description: Use when helping an end user evaluate their own Vercel AI SDK agent with ai-eval: set up config, write scenario datasets, run mock or live evals, interpret scores/reports/traces, compare baselines, and debug failures safely.
+description: Use when helping an end user evaluate their own Vercel AI SDK agent with ai-eval through JSON scenario datasets and configuration, run mock or live evals, interpret scores/reports/traces, compare baselines, and debug failures safely.
 ---
 
 # AI Eval User Guide
 
-Use this skill to help a user evaluate **their own agent** with `ai-eval`. Focus on setup, scenario design, running evals, and interpreting reports. Do not assume the user is contributing to this repository.
+Use this skill to help a user evaluate **their own agent** with `ai-eval`. Treat the user workflow as JSON-config-first: users should write scenario datasets and evaluator settings in JSON. TypeScript agent adapters are an integration detail for the app/team, not the normal user workflow.
 
 ## Mental Model
 
@@ -20,30 +20,39 @@ Use consistent public terms: `scenario`, `turn`, `trace`, `step`, `evaluator`, `
 
 ## User Setup
 
-Have the user add a config file in their project:
+Prefer a JSON-first user setup:
 
-```ts
-import { defineAgentEvalConfig } from 'ai-eval';
-import { createMyAgent } from './src/my-agent';
-
-export default defineAgentEvalConfig({
-  agents: [
-    {
-      key: 'my-agent',
-      name: 'My Agent',
-      createAgent: () => createMyAgent(),
-    },
-  ],
-  evaluators: [
-    'tool-usage',
-    'latency',
-    'token-budget',
-    'step-count',
-    'finish-reason',
-    'text-contains',
-  ],
-});
+```text
+evals/
+  ai-eval.config.json
+  scenarios/
+    smoke.json
+    tool-use.json
+    multi-turn.json
+    regressions.json
 ```
+
+The user-owned JSON config describes which registered agent and evaluators to use:
+
+```json
+{
+  "agentKey": "my-agent",
+  "evaluators": [
+    "tool-usage",
+    "latency",
+    "token-budget",
+    "step-count",
+    "finish-reason",
+    "text-contains"
+  ],
+  "defaults": {
+    "timeoutMs": 90000,
+    "outputDir": "./eval-runs/current"
+  }
+}
+```
+
+Important: connecting `agentKey` to a real AI SDK `createAgent()` factory may still require an app-provided adapter or registry. Do not make the end user write that adapter unless they are explicitly acting as the integrator.
 
 For OpenAI-compatible custom routers, recommend environment variables:
 
@@ -57,7 +66,7 @@ Never print or commit real keys. Keep `.env` ignored.
 
 ## Scenario Dataset
 
-A scenario is one eval case:
+The main user-authored artifact is a scenario JSON file. A scenario is one eval case:
 
 ```json
 {
@@ -101,7 +110,7 @@ Run a dataset:
 
 ```bash
 agent-eval run \
-  --config ./agent-eval.config.ts \
+  --config ./evals/ai-eval.config.json \
   --scenarios ./evals/scenarios \
   --output-dir ./eval-runs/current \
   --timeout-ms 90000
@@ -111,7 +120,7 @@ Run one scenario while debugging:
 
 ```bash
 agent-eval run \
-  --config ./agent-eval.config.ts \
+  --config ./evals/ai-eval.config.json \
   --scenarios ./evals/scenarios \
   --scenario-id required-tool-used \
   --output-dir /tmp/agent-eval-debug \
@@ -206,7 +215,7 @@ Multi-turn scenario:
 
 Structured-output scenario:
 
-- Register a Zod schema in config.
+- Reference a schema key exposed by the app's eval adapter.
 - Add a `schema` expectation with `requireStructuredOutput: true`.
 
 Regression scenario:
@@ -221,4 +230,13 @@ Complex live scenario:
 - Let the model produce final text after tools finish.
 - Keep latency/token limits realistic for the number of turns and tools.
 
-For OpenAI-compatible routers that do not support Responses API tool-loop continuation, use `openai.chat(model)` in the user's agent factory.
+For OpenAI-compatible routers that do not support Responses API tool-loop continuation, tell the integrator to use `openai.chat(model)` in the agent adapter.
+
+## Adapter Boundary
+
+If the user asks how agents are registered, explain the split:
+
+- **End user**: writes JSON config and scenario datasets.
+- **Integrator/developer**: registers actual agent factories, tools, and schemas.
+
+When the current CLI only accepts a TypeScript/JavaScript config, treat that as an implementation gap to improve, not the desired user workflow. Recommend adding a product wrapper that reads `evals/ai-eval.config.json`, resolves `agentKey` from a prebuilt registry, and passes scenarios into `runAgentEval`. The end user should still only edit JSON.
