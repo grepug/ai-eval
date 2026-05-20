@@ -3,6 +3,9 @@ dist/
 coverage/
 .turbo/
 .DS_Store
+.env
+.env.*
+!.env.example
 tsup.config.js
 tsup.config.js.map
 tsup.config.d.ts
