@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { AiSdkAgentHarness } from '../ai-sdk/agent-harness.js';
 import { compareAgentEvalAudits } from './baseline-comparator.js';
 import { resolveEvaluators } from './evaluator-registry.js';
-import { createRunId } from './ids.js';
+import { createRunId, findingId, traceArtifactPath } from './ids.js';
 import { parseJsonObject } from './json.js';
 import { validateScenarios } from './scenario-loader.js';
 import { writeArtifacts } from './artifact-writer.js';
@@ -42,44 +42,67 @@ export async function runAgentEval(input: RunAgentEvalInput): Promise<AgentEvalR
   const scenarioResults: Record<string, ScenarioAuditResult> = {};
   const findings: Record<string, EvalFinding> = {};
   const findingOrder: string[] = [];
+  const tasks = scenarios.flatMap((scenario) => agents.map((agent) => ({ scenario, agent })));
+  const taskResults = await mapWithConcurrency(tasks, input.concurrency ?? 1, async ({ scenario, agent }) => {
+    const traces = await harness.runScenario({
+      agentDefinition: agent,
+      scenario,
+      runId,
+      timeoutMs: input.timeoutMs,
+      includeRawAiSdkResult: input.includeRawAiSdkResult || mode === 'debug',
+      debug: mode === 'debug',
+      executionMode: input.executionMode ?? 'generate',
+      historyMode: input.historyMode,
+    });
+    const redactedTraces = input.redactor ? traces.map((trace) => input.redactor?.redactTrace(trace) ?? trace) : traces;
+    const evaluatorResults = await evaluateScenario({
+      scenario,
+      agentKey: agent.key,
+      traces: redactedTraces,
+      evaluatorRegistry,
+      schemas: input.schemas,
+      pricing: input.pricing,
+    });
+    return { scenario, agent, traces: redactedTraces, evaluatorResults };
+  });
 
   for (const scenario of scenarios) {
     const agentResults: Record<string, AgentScenarioResult> = {};
 
     for (const agent of agents) {
-      const traces = await harness.runScenario({
-        agentDefinition: agent,
-        scenario,
-        runId,
-        timeoutMs: input.timeoutMs,
-        includeRawAiSdkResult: input.includeRawAiSdkResult || mode === 'debug',
-        debug: mode === 'debug',
-        historyMode: input.historyMode,
-      });
-      const redactedTraces = input.redactor ? traces.map((trace) => input.redactor?.redactTrace(trace) ?? trace) : traces;
+      const result = taskResults.find((item) => item.scenario.id === scenario.id && item.agent.key === agent.key);
+      if (!result) {
+        throw new Error(`Missing run result for scenario ${scenario.id} and agent ${agent.key}.`);
+      }
+      const redactedTraces = result.traces;
       const key = `${scenario.id}:${agent.key}`;
       tracesByScenarioAgent[key] = redactedTraces;
-      const evaluatorResults = await evaluateScenario({
-        scenario,
-        agentKey: agent.key,
-        traces: redactedTraces,
-        evaluatorRegistry,
-        schemas: input.schemas,
-        pricing: input.pricing,
-      });
+      const evaluatorResults = result.evaluatorResults;
       const agentStatus = statusFromEvaluatorResults(redactedTraces, evaluatorResults);
 
       for (const result of evaluatorResults) {
-        for (const finding of result.findings) {
-          const redacted = input.redactor?.redactFinding?.(finding) ?? finding;
+        for (const [index, finding] of result.findings.entries()) {
+          const namespaced = {
+            ...finding,
+            id: findingId({
+              scenarioId: scenario.id,
+              agentKey: agent.key,
+              expectationId: result.expectationId,
+              findingId: finding.id,
+              index,
+            }),
+          };
+          const redacted = input.redactor?.redactFinding?.(namespaced) ?? namespaced;
+          if (!findings[redacted.id]) {
+            findingOrder.push(redacted.id);
+          }
           findings[redacted.id] = redacted;
-          findingOrder.push(redacted.id);
         }
       }
 
       agentResults[agent.key] = {
         agentKey: agent.key,
-        tracePaths: redactedTraces.map((trace) => `traces/${trace.scenarioId}/${trace.agentKey}.turn-${trace.turnIndex + 1}.json`),
+        tracePaths: redactedTraces.map(traceArtifactPath),
         evaluatorResults,
         summary: {
           status: agentStatus,
@@ -215,7 +238,7 @@ async function evaluateScenario(input: {
             severity: 'blocker',
             title: 'Agent execution failed',
             details: trace.diagnostics.error?.message ?? trace.status,
-            evidencePath: `traces/${trace.scenarioId}/${trace.agentKey}.turn-${trace.turnIndex + 1}.json`,
+            evidencePath: traceArtifactPath(trace),
             recommendation: 'Inspect the trace diagnostics and provider/tool error.',
           },
         ],
@@ -223,6 +246,27 @@ async function evaluateScenario(input: {
     }
   }
 
+  return results;
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  mapper: (item: TInput) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  const limit = Math.max(1, Math.floor(concurrency));
+  const results: TOutput[] = new Array<TOutput>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index] as TInput);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
   return results;
 }
 

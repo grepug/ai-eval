@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { safePathSegment } from './ids.js';
+import { traceArtifactPath } from './ids.js';
 import { stableJson } from './json.js';
 import { renderAgentEvalReview } from './review.js';
 import type { AgentEvalAudit, AgentEvalSummary, AiSdkEvalTrace, ArtifactWriteResult } from './types.js';
@@ -16,11 +16,7 @@ export async function writeArtifacts(input: {
   for (const [key, traces] of Object.entries(input.tracesByScenarioAgent)) {
     tracePaths[key] = [];
     for (const trace of traces) {
-      const relativeTracePath = join(
-        'traces',
-        safePathSegment(trace.scenarioId),
-        `${safePathSegment(trace.agentKey)}.turn-${trace.turnIndex + 1}.json`,
-      );
+      const relativeTracePath = traceArtifactPath(trace);
       const absoluteTracePath = join(input.outputDir, relativeTracePath);
       await mkdir(dirname(absoluteTracePath), { recursive: true });
       await writeFile(absoluteTracePath, stableJson(trace));

@@ -55,6 +55,7 @@ export function normalizeAiSdkResult(input: NormalizeAiSdkResultInput): AiSdkEva
   const toolCallCount = normalizedSteps.reduce((total, step) => total + step.toolCalls.length, 0);
   const toolResultCount = normalizedSteps.reduce((total, step) => total + step.toolResults.length, 0);
   const durationMs = input.completedAt.getTime() - input.startedAt.getTime();
+  const firstTokenMs = typeof result.firstTokenMs === 'number' ? result.firstTokenMs : null;
 
   return {
     schemaVersion: 'ai-sdk-eval-trace.v1',
@@ -80,7 +81,7 @@ export function normalizeAiSdkResult(input: NormalizeAiSdkResultInput): AiSdkEva
     usage,
     timing: {
       durationMs,
-      firstTokenMs: null,
+      firstTokenMs,
       maxStepMs: null,
     },
     diagnostics: {

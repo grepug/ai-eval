@@ -5,6 +5,7 @@ import type {
   EvaluatorResult,
   FindingSeverity,
 } from '../core/types.js';
+import { traceArtifactPath } from '../core/ids.js';
 
 export function createPassed(expectation: EvalExpectation, metrics?: EvaluatorResult['metrics']): EvaluatorResult {
   return {
@@ -52,7 +53,7 @@ export function evidencePathForTrace(trace?: AiSdkEvalTrace): string {
   if (!trace) {
     return 'audit.json';
   }
-  return `traces/${trace.scenarioId}/${trace.agentKey}.turn-${trace.turnIndex + 1}.json`;
+  return traceArtifactPath(trace);
 }
 
 export function maxSeverity(findings: EvalFinding[]): FindingSeverity | null {

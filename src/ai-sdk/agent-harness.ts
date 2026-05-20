@@ -5,6 +5,7 @@ import type {
   AiSdkEvalTrace,
   EvalMessage,
   EvalScenario,
+  ExecutionMode,
   HistoryMode,
 } from '../core/types.js';
 
@@ -15,6 +16,7 @@ export interface AiSdkRunScenarioInput {
   timeoutMs?: number;
   includeRawAiSdkResult?: boolean;
   debug?: boolean;
+  executionMode?: ExecutionMode;
   historyMode?: HistoryMode;
 }
 
@@ -38,11 +40,14 @@ export class AiSdkAgentHarness {
       const startedAt = new Date();
 
       try {
-        const result = await agent.generate({
+        const request = {
           messages,
           timeout: input.timeoutMs ? { totalMs: input.timeoutMs } : undefined,
           include: input.debug ? { requestBody: true, responseBody: true } : undefined,
-        });
+        };
+        const result = input.executionMode === 'stream'
+          ? await collectStreamResult(agent.stream?.(request))
+          : await agent.generate(request);
         const completedAt = new Date();
         const trace = normalizeAiSdkResult({
           result,
@@ -78,6 +83,54 @@ export class AiSdkAgentHarness {
 
     return traces;
   }
+}
+
+async function collectStreamResult(streamResult: unknown): Promise<unknown> {
+  if (!streamResult || typeof streamResult !== 'object') {
+    throw new Error('Agent does not support stream execution mode.');
+  }
+
+  const record = streamResult as Record<string, unknown>;
+  const startedAt = Date.now();
+  let firstTokenMs: number | null = null;
+  let streamedText = '';
+
+  if (isAsyncIterable(record.textStream)) {
+    for await (const chunk of record.textStream) {
+      if (firstTokenMs === null) {
+        firstTokenMs = Date.now() - startedAt;
+      }
+      streamedText += String(chunk);
+    }
+  } else if (typeof record.consumeStream === 'function') {
+    await record.consumeStream();
+  }
+
+  const resolvedText = await resolveMaybe(record.text);
+  const text = streamedText || (typeof resolvedText === 'string' ? resolvedText : '');
+  const output = await resolveMaybe(record.output);
+  const steps = await resolveMaybe(record.steps) ?? [];
+  const response = await resolveMaybe(record.response);
+  const finishReason = await resolveMaybe(record.finishReason);
+  const totalUsage = await resolveMaybe(record.totalUsage ?? record.usage);
+
+  return {
+    text,
+    output,
+    steps,
+    response,
+    finishReason,
+    totalUsage,
+    firstTokenMs,
+  };
+}
+
+async function resolveMaybe<T>(value: T | Promise<T>): Promise<T> {
+  return await value;
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return Boolean(value && typeof value === 'object' && Symbol.asyncIterator in value);
 }
 
 function toModelMessages(messages: EvalMessage[]): unknown[] {
