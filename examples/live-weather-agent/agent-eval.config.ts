@@ -16,14 +16,16 @@ export default defineAgentEvalConfig({
         }
 
         return new ToolLoopAgent({
-          model: openai(model),
+          model: openai.chat(model),
           instructions: [
             'You are a concise weather assistant.',
             'Always use the weather tool before answering weather questions.',
             'Use the tool result as the source of truth.',
           ].join(' '),
-          toolChoice: { type: 'tool', toolName: 'weather' },
           stopWhen: stepCountIs(4),
+          prepareStep: ({ stepNumber }) => ({
+            toolChoice: stepNumber === 0 ? { type: 'tool', toolName: 'weather' } : 'auto',
+          }),
           maxOutputTokens: 220,
           tools: {
             weather: tool({

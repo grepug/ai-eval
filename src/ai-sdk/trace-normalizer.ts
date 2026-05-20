@@ -22,21 +22,22 @@ export interface NormalizeAiSdkResultInput {
 
 export function normalizeAiSdkResult(input: NormalizeAiSdkResultInput): AiSdkEvalTrace {
   const result = asRecord(input.result);
-  const steps = Array.isArray(result.steps) ? result.steps.map(asRecord) : [];
+  const rawSteps = safeGet(result, 'steps');
+  const steps = Array.isArray(rawSteps) ? rawSteps.map(asRecord) : [];
   const normalizedSteps = steps.map((step, index) => {
     const response = asRecordOrUndefined(step.response);
     const request = asRecordOrUndefined(step.request);
     return {
       index: typeof step.stepNumber === 'number' ? step.stepNumber : index,
-      stepType: typeof step.stepType === 'string' ? step.stepType : undefined,
-      text: typeof step.text === 'string' ? step.text : undefined,
-      finishReason: stringifyOptional(step.finishReason),
-      rawFinishReason: step.rawFinishReason,
-      toolCalls: normalizeToolCalls(step.toolCalls),
-      toolResults: normalizeToolResults(step.toolResults),
-      usage: normalizeUsage(step.usage),
-      warnings: Array.isArray(step.warnings) ? step.warnings : undefined,
-      providerMetadata: step.providerMetadata,
+      stepType: stringifyOptional(safeGet(step, 'stepType')),
+      text: stringifyOptional(safeGet(step, 'text')),
+      finishReason: stringifyOptional(safeGet(step, 'finishReason')),
+      rawFinishReason: safeGet(step, 'rawFinishReason'),
+      toolCalls: normalizeToolCalls(safeGet(step, 'toolCalls')),
+      toolResults: normalizeToolResults(safeGet(step, 'toolResults')),
+      usage: normalizeUsage(safeGet(step, 'usage')),
+      warnings: Array.isArray(safeGet(step, 'warnings')) ? safeGet(step, 'warnings') as unknown[] : undefined,
+      providerMetadata: safeGet(step, 'providerMetadata'),
       request: request ? { body: request.body } : undefined,
       response: response
         ? {
@@ -51,11 +52,15 @@ export function normalizeAiSdkResult(input: NormalizeAiSdkResultInput): AiSdkEva
     };
   });
 
-  const usage = normalizeUsage(result.totalUsage ?? result.usage);
+  const usage = normalizeUsage(safeGet(result, 'totalUsage') ?? safeGet(result, 'usage'));
   const toolCallCount = normalizedSteps.reduce((total, step) => total + step.toolCalls.length, 0);
   const toolResultCount = normalizedSteps.reduce((total, step) => total + step.toolResults.length, 0);
   const durationMs = input.completedAt.getTime() - input.startedAt.getTime();
-  const firstTokenMs = typeof result.firstTokenMs === 'number' ? result.firstTokenMs : null;
+  const firstTokenMs = typeof safeGet(result, 'firstTokenMs') === 'number' ? safeGet(result, 'firstTokenMs') as number : null;
+  const output = safeGet(result, 'output');
+  const response = asRecordOrUndefined(safeGet(result, 'response'));
+  const text = safeGet(result, 'text');
+  const finishReason = safeGet(result, 'finishReason');
 
   return {
     schemaVersion: 'ai-sdk-eval-trace.v1',
@@ -72,10 +77,10 @@ export function normalizeAiSdkResult(input: NormalizeAiSdkResultInput): AiSdkEva
       messages: input.messages,
     },
     output: {
-      text: typeof result.text === 'string' ? result.text : '',
-      structured: result.output,
-      responseMessages: asRecordOrUndefined(result.response)?.messages as unknown[] | undefined,
-      finishReason: stringifyOptional(result.finishReason),
+      text: typeof text === 'string' ? text : '',
+      structured: output,
+      responseMessages: response?.messages as unknown[] | undefined,
+      finishReason: stringifyOptional(finishReason),
     },
     steps: normalizedSteps,
     usage,
@@ -188,6 +193,14 @@ function normalizeToolResults(value: unknown): AiSdkEvalToolResult[] {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function safeGet(record: Record<string, unknown>, key: string): unknown {
+  try {
+    return record[key];
+  } catch {
+    return undefined;
+  }
 }
 
 function asRecordOrUndefined(value: unknown): Record<string, unknown> | undefined {

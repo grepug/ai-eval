@@ -37,4 +37,32 @@ describe('normalizeAiSdkResult', () => {
     expect(trace.usage.totalTokens).toBe(15);
     expect(trace.timing.durationMs).toBe(2000);
   });
+
+  it('does not fail when an unconfigured structured output getter throws', () => {
+    const result = {
+      text: 'Tokyo is cloudy.',
+      finishReason: 'stop',
+      totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      response: { messages: [{ role: 'assistant', content: 'Tokyo is cloudy.' }] },
+      steps: [],
+      get output() {
+        throw new Error('No output generated.');
+      },
+    };
+
+    const trace = normalizeAiSdkResult({
+      runId: 'run-1',
+      scenarioId: 'weather-tool-required',
+      agentKey: 'weather-agent',
+      turnIndex: 0,
+      messages: [{ role: 'user', content: 'Weather?' }],
+      startedAt: new Date('2026-05-20T00:00:00.000Z'),
+      completedAt: new Date('2026-05-20T00:00:02.000Z'),
+      result,
+    });
+
+    expect(trace.status).toBe('completed');
+    expect(trace.output.text).toBe('Tokyo is cloudy.');
+    expect(trace.output.structured).toBeUndefined();
+  });
 });
