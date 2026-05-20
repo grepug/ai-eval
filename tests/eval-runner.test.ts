@@ -53,6 +53,7 @@ describe('runAgentEval', () => {
       });
 
       expect(result.audit.evalRun.decision).toBe('passed');
+      expect(result.summary.auditPath).toBe('audit.json');
       expect(JSON.parse(await readFile(join(outputDir, 'summary.json'), 'utf8')).decision).toBe('passed');
       expect(await readFile(join(outputDir, 'review.md'), 'utf8')).toContain('Decision: Passed');
       expect(await readFile(join(outputDir, 'traces/weather-tool-required/weather-agent.turn-1.json'), 'utf8')).toContain('weather');

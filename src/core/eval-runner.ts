@@ -152,7 +152,7 @@ export async function runAgentEval(input: RunAgentEvalInput): Promise<AgentEvalR
     }
   }
 
-  const artifacts = await writeArtifacts({ outputDir: input.outputDir, audit, tracesByScenarioAgent });
+  await writeArtifacts({ outputDir: input.outputDir, audit, tracesByScenarioAgent });
   const reviewMarkdown = renderAgentEvalReview(audit);
 
   return {
@@ -163,9 +163,9 @@ export async function runAgentEval(input: RunAgentEvalInput): Promise<AgentEvalR
       runId,
       decision: audit.evalRun.decision,
       status: audit.evalRun.status,
-      auditPath: artifacts.auditPath,
-      reviewPath: artifacts.reviewPath,
-      summaryPath: artifacts.summaryPath,
+      auditPath: 'audit.json',
+      reviewPath: 'review.md',
+      summaryPath: 'summary.json',
     },
   };
 }
