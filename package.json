@@ -1,0 +1,46 @@
+{
+  "name": "ai-eval",
+  "version": "0.1.0",
+  "description": "AI SDK-first agent evaluation framework.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "bin": {
+    "agent-eval": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "peerDependencies": {
+    "ai": ">=6.0.185"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "jiti": "^2.7.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "ai": "6.0.185",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

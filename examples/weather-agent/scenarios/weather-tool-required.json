@@ -1,0 +1,29 @@
+{
+  "id": "weather-tool-required",
+  "title": "Weather tool is used for live weather",
+  "kind": "tool_loop",
+  "tags": ["tools", "weather"],
+  "turns": [
+    {
+      "user": "What is the weather in Tokyo today?"
+    }
+  ],
+  "expectations": [
+    {
+      "id": "uses-weather-tool",
+      "evaluator": "tool-usage",
+      "severity": "blocker",
+      "config": {
+        "requiredToolCalls": ["weather"]
+      }
+    },
+    {
+      "id": "latency-under-30s",
+      "evaluator": "latency",
+      "severity": "major",
+      "config": {
+        "maxRunMs": 30000
+      }
+    }
+  ]
+}
