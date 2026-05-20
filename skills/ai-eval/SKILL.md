@@ -1,137 +1,224 @@
 ---
 name: ai-eval
-description: Use when creating, running, debugging, or explaining eval scenarios for this AI SDK-first agent eval framework, including datasets, live/mock examples, scorers, reports, traces, and baseline comparisons.
+description: Use when helping an end user evaluate their own Vercel AI SDK agent with ai-eval: set up config, write scenario datasets, run mock or live evals, interpret scores/reports/traces, compare baselines, and debug failures safely.
 ---
 
-# AI Eval Framework
+# AI Eval User Guide
 
-Use this skill when working in this repo or helping a user adopt `ai-eval`.
+Use this skill to help a user evaluate **their own agent** with `ai-eval`. Focus on setup, scenario design, running evals, and interpreting reports. Do not assume the user is contributing to this repository.
 
-## Core Model
+## Mental Model
 
-Think in Vercel-style eval terms:
+Explain `ai-eval` in four parts:
 
-- **Dataset**: scenario JSON files under a scenario directory.
-- **Runner**: `agent-eval run` or `runAgentEval`.
-- **Scorer**: built-in evaluators that emit pass/fail/warning/needs_review plus metrics.
-- **Report**: `review.md`, `summary.json`, `audit.json`, and per-turn traces.
+- **Dataset**: JSON scenario files that describe user turns and expectations.
+- **Runner**: `agent-eval run`, which executes scenarios against an AI SDK agent.
+- **Scorer**: evaluators such as `tool-usage`, `latency`, `token-budget`, and `schema`.
+- **Report**: `review.md`, `summary.json`, `audit.json`, and per-turn trace JSON.
 
-Public terms must stay consistent: `scenario`, `turn`, `trace`, `step`, `evaluator`, `finding`, `audit`, `review`, `baseline`.
+Use consistent public terms: `scenario`, `turn`, `trace`, `step`, `evaluator`, `finding`, `audit`, `review`, `baseline`.
 
-## Safety Rules
+## User Setup
 
-- Never commit `.env`, API keys, live traces with secrets, or `eval-runs/`.
-- Do not call `/models` against custom routers unless the user explicitly asks.
-- Use `/tmp` files for long CLI bodies or generated PR comments.
-- Prefer deterministic local tools in examples; live examples should test agent behavior, not third-party API uptime.
-- If a live eval fails, inspect `review.md`, `audit.json`, and trace diagnostics before changing code.
+Have the user add a config file in their project:
 
-## Standard Commands
+```ts
+import { defineAgentEvalConfig } from 'ai-eval';
+import { createMyAgent } from './src/my-agent';
 
-Run checks:
-
-```bash
-pnpm check
+export default defineAgentEvalConfig({
+  agents: [
+    {
+      key: 'my-agent',
+      name: 'My Agent',
+      createAgent: () => createMyAgent(),
+    },
+  ],
+  evaluators: [
+    'tool-usage',
+    'latency',
+    'token-budget',
+    'step-count',
+    'finish-reason',
+    'text-contains',
+  ],
+});
 ```
 
-Run the mock example:
+For OpenAI-compatible custom routers, recommend environment variables:
 
 ```bash
-pnpm example:mock
+OPENAI_BASE_URL=https://your-router.example/v1
+OPENAI_API_KEY=...
+AI_EVAL_LIVE_MODEL=gpt-5.4-mini
 ```
 
-Run the simple live weather example:
+Never print or commit real keys. Keep `.env` ignored.
 
-```bash
-pnpm example:live
-```
-
-Run the complex live trip planner example:
-
-```bash
-pnpm example:trip-live
-```
-
-Run a custom dataset:
-
-```bash
-node --env-file-if-exists=.env dist/cli/index.js run \
-  --config ./agent-eval.config.ts \
-  --scenarios ./evals/scenarios \
-  --output-dir /tmp/my-agent-eval-run \
-  --timeout-ms 90000 \
-  --json
-```
-
-## Scenario Shape
+## Scenario Dataset
 
 A scenario is one eval case:
 
 ```json
 {
-  "id": "stable-id",
-  "title": "Human-readable title",
+  "id": "required-tool-used",
+  "title": "Agent uses the required tool",
   "kind": "tool_loop",
-  "tags": ["smoke"],
+  "tags": ["smoke", "tools"],
   "turns": [
-    { "user": "User prompt" }
+    { "user": "Answer this using the product lookup tool." }
   ],
   "expectations": [
     {
-      "id": "uses-required-tool",
+      "id": "uses-product-lookup",
       "evaluator": "tool-usage",
       "severity": "blocker",
       "config": {
-        "requiredToolCalls": ["weather"]
+        "requiredToolCalls": ["productLookup"],
+        "maxToolCallCount": 3
       }
     }
   ]
 }
 ```
 
-Use `multi_turn` when memory/state matters. The runner carries forward AI SDK response messages by default.
+Recommended dataset structure:
+
+```text
+evals/
+  scenarios/
+    smoke.json
+    tool-use.json
+    multi-turn.json
+    regressions.json
+```
+
+Start with 5-10 scenarios. Prefer stable, deterministic expectations before adding subjective judging.
+
+## Running Evals
+
+Run a dataset:
+
+```bash
+agent-eval run \
+  --config ./agent-eval.config.ts \
+  --scenarios ./evals/scenarios \
+  --output-dir ./eval-runs/current \
+  --timeout-ms 90000
+```
+
+Run one scenario while debugging:
+
+```bash
+agent-eval run \
+  --config ./agent-eval.config.ts \
+  --scenarios ./evals/scenarios \
+  --scenario-id required-tool-used \
+  --output-dir /tmp/agent-eval-debug \
+  --debug
+```
+
+Compare against a baseline:
+
+```bash
+agent-eval compare \
+  --baseline ./eval-runs/main/audit.json \
+  --candidate ./eval-runs/current/audit.json
+```
 
 ## Built-In Evaluators
 
-- `tool-usage`: required/forbidden tools, order, max tool count.
+- `tool-usage`: required/forbidden tools, ordered tools, max tool count.
 - `text-contains`: required/forbidden final text.
 - `step-count`: AI SDK loop step budget.
 - `finish-reason`: expected finish reasons such as `stop`.
-- `latency`: max run/turn/first-token time.
-- `token-budget`: input/output/total token limits.
+- `latency`: max run, turn, or first-token time.
+- `token-budget`: input, output, or total token limits.
 - `schema`: structured output against a registered Zod schema.
-- `human-review`: marks an expectation as needing review.
-- `llm-judge`: placeholder; register a project-specific judge for real scoring.
+- `human-review`: marks an expectation as requiring human review.
+- `llm-judge`: placeholder; users should register a project-specific judge.
 
-Severity weights for score:
+Severity guidance:
+
+- `blocker`: hard product contract, such as required tool use or schema validity.
+- `major`: serious behavior regression.
+- `minor`: budget, latency, or wording guardrail.
+- `info`: report-only signal.
+
+## Score and Reports
+
+Read `review.md` first. It summarizes:
+
+- decision
+- score
+- pass rate
+- highest-priority findings
+- scenario results
+- artifact paths
+
+`summary.json` is for CI:
+
+```json
+{
+  "decision": "passed",
+  "score": 1,
+  "scorePercent": 100,
+  "passRate": 1
+}
+```
+
+`audit.json` is the source of truth. It includes evaluator results, findings, metrics, baseline comparison, and score details.
+
+Score weights:
 
 - `blocker`: 50
 - `major`: 30
 - `minor`: 15
 - `info`: 5
 
-Top-level score is `earnedScore / maxScore`; pass rate is `passed expectations / total expectations`.
+Top-level score is `earnedScore / maxScore`. Pass rate is `passed expectations / total expectations`.
 
-## Debug Workflow
+## Debugging Failures
 
-1. Run the eval and note `decision`, `scorePercent`, and `passRate`.
-2. Read `review.md` first for findings.
-3. Read `audit.json` for evaluator results and metrics.
-4. Read traces under `traces/<scenario>/<agent>.turn-N.json` for step-level evidence.
-5. If the failure is provider/auth/router related, inspect the trace diagnostic error and avoid broad code changes.
-6. If the failure is expected behavior drift, update agent instructions/tools first, not evaluator thresholds.
-7. Relax thresholds only when the live behavior is correct and the original threshold was unrealistic.
+1. Open `review.md` and identify the first finding.
+2. Open `audit.json` and inspect the failed evaluator result.
+3. Open the referenced trace file under `traces/<scenario>/<agent>.turn-N.json`.
+4. Check `diagnostics.error` for provider/auth/router failures.
+5. Check `steps[*].toolCalls`, `steps[*].toolResults`, `finishReason`, and `usage`.
+6. If behavior is wrong, fix the agent prompt/tool/schema.
+7. If behavior is correct but the eval fails, adjust the scenario expectation.
+8. Relax thresholds only when the threshold was unrealistic.
 
-## Example Patterns
+Do not call `/models` against custom routers unless the user explicitly asks.
 
-Simple live example:
+## Good Scenario Patterns
 
-- `examples/live-weather-agent/agent-eval.config.ts`
-- `examples/live-weather-agent/scenarios/weather-tool-required.json`
+Tool-use scenario:
 
-Complex live example:
+- Require the correct tool.
+- Forbid destructive tools.
+- Limit max tool calls.
 
-- `examples/live-trip-planner-agent/agent-eval.config.ts`
-- `examples/live-trip-planner-agent/scenarios/tokyo-trip-planning.json`
+Multi-turn scenario:
 
-For live OpenAI-compatible routers, prefer `openai.chat(model)` when the router does not support OpenAI Responses API tool-loop continuation semantics.
+- First turn establishes preference or state.
+- Later turn checks whether the agent preserves it.
+
+Structured-output scenario:
+
+- Register a Zod schema in config.
+- Add a `schema` expectation with `requireStructuredOutput: true`.
+
+Regression scenario:
+
+- Reproduce a known past failure.
+- Keep the prompt and expectation narrow.
+
+Complex live scenario:
+
+- Use deterministic local tools.
+- Force required tools only when necessary.
+- Let the model produce final text after tools finish.
+- Keep latency/token limits realistic for the number of turns and tools.
+
+For OpenAI-compatible routers that do not support Responses API tool-loop continuation, use `openai.chat(model)` in the user's agent factory.
