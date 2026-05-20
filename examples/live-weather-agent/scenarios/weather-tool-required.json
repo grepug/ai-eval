@@ -1,0 +1,64 @@
+{
+  "id": "live-weather-tool-required",
+  "title": "Live model uses weather tool",
+  "kind": "tool_loop",
+  "tags": ["live", "tools", "weather"],
+  "turns": [
+    {
+      "user": "What is the weather in Tokyo today? Answer in one sentence."
+    }
+  ],
+  "expectations": [
+    {
+      "id": "uses-weather-tool",
+      "evaluator": "tool-usage",
+      "severity": "blocker",
+      "config": {
+        "requiredToolCalls": ["weather"],
+        "requiredOrder": ["weather"],
+        "maxToolCallCount": 1
+      }
+    },
+    {
+      "id": "finish-reason-stop",
+      "evaluator": "finish-reason",
+      "severity": "major",
+      "config": {
+        "allowedFinishReasons": ["stop"]
+      }
+    },
+    {
+      "id": "step-count-budget",
+      "evaluator": "step-count",
+      "severity": "major",
+      "config": {
+        "minSteps": 2,
+        "maxSteps": 4
+      }
+    },
+    {
+      "id": "latency-under-60s",
+      "evaluator": "latency",
+      "severity": "major",
+      "config": {
+        "maxRunMs": 60000
+      }
+    },
+    {
+      "id": "token-budget",
+      "evaluator": "token-budget",
+      "severity": "minor",
+      "config": {
+        "maxTotalTokens": 2000
+      }
+    },
+    {
+      "id": "mentions-tool-city",
+      "evaluator": "text-contains",
+      "severity": "minor",
+      "config": {
+        "required": ["Tokyo"]
+      }
+    }
+  ]
+}

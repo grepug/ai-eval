@@ -1,0 +1,69 @@
+{
+  "id": "tokyo-family-trip-planning",
+  "title": "Tokyo trip planner uses preferences, weather, attractions, and budget",
+  "kind": "multi_turn",
+  "tags": ["live", "multi-turn", "tools", "travel"],
+  "turns": [
+    {
+      "user": "I'm planning a 2-day Tokyo trip next weekend. I like museums and quiet food spots. Can you help?"
+    },
+    {
+      "user": "Keep it under $500 and avoid nightlife. Give me a compact plan."
+    }
+  ],
+  "expectations": [
+    {
+      "id": "uses-required-tools",
+      "evaluator": "tool-usage",
+      "severity": "blocker",
+      "config": {
+        "requiredToolCalls": ["profile", "weather", "searchAttractions", "estimateBudget"],
+        "requiredOrder": ["profile", "weather", "searchAttractions", "estimateBudget"],
+        "maxToolCallCount": 8
+      }
+    },
+    {
+      "id": "finishes-cleanly",
+      "evaluator": "finish-reason",
+      "severity": "major",
+      "config": {
+        "allowedFinishReasons": ["stop"]
+      }
+    },
+    {
+      "id": "step-count-budget",
+      "evaluator": "step-count",
+      "severity": "major",
+      "config": {
+        "minSteps": 5,
+        "maxSteps": 12
+      }
+    },
+    {
+      "id": "mentions-required-plan-elements",
+      "evaluator": "text-contains",
+      "severity": "major",
+      "config": {
+        "required": ["Tokyo", "$500", "museum", "quiet"],
+        "forbidden": ["nightclub", "bar crawl"],
+        "caseSensitive": false
+      }
+    },
+    {
+      "id": "latency-under-90s",
+      "evaluator": "latency",
+      "severity": "minor",
+      "config": {
+        "maxRunMs": 90000
+      }
+    },
+    {
+      "id": "token-budget",
+      "evaluator": "token-budget",
+      "severity": "minor",
+      "config": {
+        "maxTotalTokens": 10000
+      }
+    }
+  ]
+}

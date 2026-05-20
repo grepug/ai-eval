@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.DS_Store
+.env
+.env.*
+!.env.example
+tsup.config.js
+tsup.config.js.map
+tsup.config.d.ts
+tsup.config.d.ts.map
+vitest.config.js
+vitest.config.js.map
+vitest.config.d.ts
+vitest.config.d.ts.map
+
+# Eval artifacts may contain prompts, tool inputs, tool outputs, and provider payloads.
+eval-runs/
+*.eval-run/

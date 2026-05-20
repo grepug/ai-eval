@@ -1,0 +1,50 @@
+{
+  "name": "ai-eval",
+  "version": "0.1.0",
+  "description": "AI SDK-first agent evaluation framework.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "bin": {
+    "agent-eval": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "example:mock": "pnpm build && node dist/cli/index.js run --config examples/weather-agent/agent-eval.config.ts --scenarios examples/weather-agent/scenarios --output-dir /tmp/ai-eval-example-run --json",
+    "example:live": "pnpm build && node --env-file-if-exists=.env dist/cli/index.js run --config examples/live-weather-agent/agent-eval.config.ts --scenarios examples/live-weather-agent/scenarios --output-dir /tmp/ai-eval-live-run --timeout-ms 60000 --json",
+    "example:trip-live": "pnpm build && node --env-file-if-exists=.env dist/cli/index.js run --config examples/live-trip-planner-agent/agent-eval.config.ts --scenarios examples/live-trip-planner-agent/scenarios --output-dir /tmp/ai-eval-trip-live-run --timeout-ms 90000 --json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "peerDependencies": {
+    "ai": ">=6.0.185"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "jiti": "^2.7.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "3.0.64",
+    "@types/node": "^24.10.0",
+    "ai": "6.0.185",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
