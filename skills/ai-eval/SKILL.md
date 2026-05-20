@@ -5,7 +5,7 @@ description: Use when helping an end user evaluate their own Vercel AI SDK agent
 
 # AI Eval User Guide
 
-Use this skill to help a user evaluate **their own agent** with `ai-eval`. Treat the user workflow as JSON-config-first: users should write scenario datasets and evaluator settings in JSON. TypeScript agent adapters are an integration detail for the app/team, not the normal user workflow.
+Use this skill to help a user evaluate **their own agent** with `ai-eval`. Treat the workflow as JSON-first, not JSON-only: users should write scenario datasets and evaluator settings in JSON, but there must be a real hook that binds `agentKey` to their AI SDK agent.
 
 ## Mental Model
 
@@ -52,7 +52,39 @@ The user-owned JSON config describes which registered agent and evaluators to us
 }
 ```
 
-Important: connecting `agentKey` to a real AI SDK `createAgent()` factory may still require an app-provided adapter or registry. Do not make the end user write that adapter unless they are explicitly acting as the integrator.
+Push back if someone claims users only need JSON. JSON cannot instantiate arbitrary app code by itself. A usable setup needs one of these hooks:
+
+- A product/platform-provided registry where `agentKey` is already registered.
+- A one-time integration file that registers the user's agent factory.
+- A hosted eval service that already knows how to resolve the user's agent.
+
+Recommended local hook:
+
+```ts
+// agent-eval.registry.ts
+import { defineAgentEvalRegistry } from 'ai-eval';
+import { createMyAgent } from './src/my-agent';
+
+export default defineAgentEvalRegistry({
+  agents: {
+    'my-agent': {
+      name: 'My Agent',
+      createAgent: () => createMyAgent(),
+    },
+  },
+});
+```
+
+Then day-to-day eval authoring stays JSON:
+
+```bash
+agent-eval run \
+  --registry ./agent-eval.registry.ts \
+  --config ./evals/ai-eval.config.json \
+  --scenarios ./evals/scenarios
+```
+
+If the project does not provide `--registry` or equivalent yet, call that out as a product gap. Do not pretend the JSON config alone is sufficient.
 
 For OpenAI-compatible custom routers, recommend environment variables:
 
@@ -230,13 +262,13 @@ Complex live scenario:
 - Let the model produce final text after tools finish.
 - Keep latency/token limits realistic for the number of turns and tools.
 
-For OpenAI-compatible routers that do not support Responses API tool-loop continuation, tell the integrator to use `openai.chat(model)` in the agent adapter.
+For OpenAI-compatible routers that do not support Responses API tool-loop continuation, tell the integrator to use `openai.chat(model)` in the registry/adapter.
 
 ## Adapter Boundary
 
 If the user asks how agents are registered, explain the split:
 
 - **End user**: writes JSON config and scenario datasets.
-- **Integrator/developer**: registers actual agent factories, tools, and schemas.
+- **Integrator/developer**: provides the registry/adapter that registers actual agent factories, tools, and schemas.
 
-When the current CLI only accepts a TypeScript/JavaScript config, treat that as an implementation gap to improve, not the desired user workflow. Recommend adding a product wrapper that reads `evals/ai-eval.config.json`, resolves `agentKey` from a prebuilt registry, and passes scenarios into `runAgentEval`. The end user should still only edit JSON.
+When the current CLI only accepts a TypeScript/JavaScript config, treat that as an implementation gap to improve, not the desired user workflow. Recommend adding a first-class registry hook plus a product wrapper that reads `evals/ai-eval.config.json`, resolves `agentKey`, and passes scenarios into `runAgentEval`. The end user should still only edit JSON after the hook exists.
