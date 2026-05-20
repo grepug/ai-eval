@@ -167,6 +167,66 @@ agent-eval compare \
   --candidate ./eval-runs/current/audit.json
 ```
 
+## Using ai-eval in Test Suites
+
+Using `ai-eval` inside a test file can be appropriate, but only for dedicated agent integration/e2e specs. Do not use it as a replacement for normal framework unit tests.
+
+Recommended boundary:
+
+```text
+NestJS .spec.ts
+- deterministic service/controller/guard/DTO tests
+- no live model calls
+
+NestJS .e2e-spec.ts or .eval-spec.ts
+- small ai-eval smoke suite
+- asserts agent contract, decision, and score
+- usually gated behind an environment variable
+```
+
+Good use cases inside an eval/e2e spec:
+
+- agent calls the expected tools
+- agent preserves state across turns
+- agent returns schema-valid structured output
+- agent stays inside token/latency budgets
+- prompt/model/tool changes do not regress a smoke dataset
+
+Bad use cases:
+
+- replacing service unit tests
+- testing pure business logic
+- testing DTO validation
+- testing database/repository behavior
+- running broad paid live evals on every local test command
+
+Recommended gated pattern:
+
+```ts
+import { runAgentEval } from 'ai-eval';
+import config from '../agent-eval.config';
+import scenarios from '../evals/scenarios/smoke.json';
+
+const runLiveEvals = process.env.RUN_LIVE_EVALS === '1';
+
+(runLiveEvals ? describe : describe.skip)('agent eval smoke', () => {
+  it('passes smoke eval scenarios', async () => {
+    const result = await runAgentEval({
+      ...config,
+      scenarios,
+      outputDir: '/tmp/my-agent-eval-smoke',
+      timeoutMs: 90000,
+      concurrency: 1,
+    });
+
+    expect(result.audit.evalRun.decision).toBe('passed');
+    expect(result.audit.metrics.scorePercent).toBeGreaterThanOrEqual(90);
+  }, 120_000);
+});
+```
+
+Recommendation: keep the embedded spec small and stable. Put broad scenario suites in explicit eval commands or CI jobs, not in ordinary unit-test runs.
+
 ## Built-In Evaluators
 
 - `tool-usage`: required/forbidden tools, ordered tools, max tool count.
