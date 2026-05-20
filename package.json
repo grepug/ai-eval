@@ -21,6 +21,8 @@
   ],
   "scripts": {
     "build": "tsup",
+    "example:mock": "pnpm build && node dist/cli/index.js run --config examples/weather-agent/agent-eval.config.ts --scenarios examples/weather-agent/scenarios --output-dir /tmp/ai-eval-example-run --json",
+    "example:live": "pnpm build && node dist/cli/index.js run --config examples/live-weather-agent/agent-eval.config.ts --scenarios examples/live-weather-agent/scenarios --output-dir /tmp/ai-eval-live-run --timeout-ms 60000 --json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm test && pnpm build"
@@ -34,6 +36,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@ai-sdk/openai": "3.0.64",
     "@types/node": "^24.10.0",
     "ai": "6.0.185",
     "tsup": "^8.5.1",

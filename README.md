@@ -34,6 +34,31 @@ agent-eval compare \
 agent-eval review --audit ./eval-runs/current/audit.json
 ```
 
+## Examples
+
+Run the credential-free mocked example:
+
+```bash
+pnpm example:mock
+```
+
+Run the live OpenAI smoke example:
+
+```bash
+OPENAI_API_KEY=sk-... pnpm example:live
+```
+
+The live example uses `gpt-5.4-mini` by default because it is a lower-latency,
+lower-cost current OpenAI model. Override it when needed:
+
+```bash
+OPENAI_API_KEY=sk-... AI_EVAL_LIVE_MODEL=gpt-5.5 pnpm example:live
+```
+
+The live example calls a real OpenAI model but uses a deterministic local
+`weather` tool, so it verifies model tool use without depending on an external
+weather API.
+
 ## Config
 
 ```ts

@@ -9,8 +9,8 @@ export type ExecutionMode = 'generate' | 'stream';
 export type HistoryMode = 'ai_sdk_response_messages' | 'final_text_only' | 'custom';
 
 export interface AiSdkAgentLike {
-  generate(input: AiSdkGenerateInput): Promise<unknown>;
-  stream?(input: AiSdkGenerateInput): unknown;
+  generate(input: unknown): Promise<unknown>;
+  stream?(input: unknown): unknown;
 }
 
 export interface AiSdkGenerateInput {
